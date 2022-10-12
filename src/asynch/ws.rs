@@ -1,35 +1,43 @@
+#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+pub use error::*;
+
 #[cfg(feature = "edge-net")]
 pub use edge_net_impl::*;
 
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
 
-#[derive(Debug)]
-pub enum WsError<E> {
-    IoError(E),
-    UnknownFrameError,
-    PostcardError(postcard::Error),
-}
+#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+mod error {
+    use core::fmt::{self, Debug, Display};
 
-impl<E> Display for WsError<E>
-where
-    E: Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IoError(e) => write!(f, "IO Error: {}", e),
-            Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
-            Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
+    #[derive(Debug)]
+    pub enum WsError<E> {
+        IoError(E),
+        UnknownFrameError,
+        PostcardError(postcard::Error),
+    }
+
+    impl<E> core::fmt::Display for WsError<E>
+    where
+        E: core::fmt::Display,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::IoError(e) => write!(f, "IO Error: {}", e),
+                Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
+                Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
+            }
         }
     }
-}
 
-#[cfg(feature = "std")]
-impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
+    #[cfg(feature = "std")]
+    impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
 
-impl<E> From<postcard::Error> for WsError<E> {
-    fn from(e: postcard::Error) -> Self {
-        WsError::PostcardError(e)
+    impl<E> From<postcard::Error> for WsError<E> {
+        fn from(e: postcard::Error) -> Self {
+            WsError::PostcardError(e)
+        }
     }
 }
 
@@ -69,7 +77,7 @@ mod edge_net_impl {
         }
     }
 
-    impl<const N: usize, W, D> crate::asynch::channel::Sender for WsSender<N, W, D>
+    impl<const N: usize, W, D> crate::asynch::Sender for WsSender<N, W, D>
     where
         W: Write,
         D: Serialize,
@@ -120,7 +128,7 @@ mod edge_net_impl {
         }
     }
 
-    impl<const N: usize, R, D> crate::asynch::channel::Receiver for WsReceiver<N, R, D>
+    impl<const N: usize, R, D> crate::asynch::Receiver for WsReceiver<N, R, D>
     where
         R: Read,
         D: DeserializeOwned,
@@ -179,7 +187,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<const N: usize, S, D> crate::asynch::channel::Sender for WsSvcSender<N, S, D>
+    impl<const N: usize, S, D> crate::asynch::Sender for WsSvcSender<N, S, D>
     where
         S: ws::asynch::Sender,
         D: Serialize,
@@ -232,7 +240,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<const N: usize, R, D> crate::asynch::channel::Receiver for WsSvcReceiver<N, R, D>
+    impl<const N: usize, R, D> crate::asynch::Receiver for WsSvcReceiver<N, R, D>
     where
         R: ws::asynch::Receiver,
         D: DeserializeOwned,
@@ -255,9 +263,8 @@ pub mod embedded_svc_impl {
         type HandleFuture<'a, S, R>: Future<Output = Result<(), S::Error>>
         where
             Self: 'a,
-            S: crate::asynch::channel::Sender<Data = Self::SendData> + 'a,
-            R: crate::asynch::channel::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>>
-                + 'a,
+            S: crate::asynch::Sender<Data = Self::SendData> + 'a,
+            R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>> + 'a,
             S::Error: Debug + 'a;
 
         fn handle<'a, S, R>(
@@ -267,9 +274,8 @@ pub mod embedded_svc_impl {
             index: usize,
         ) -> Self::HandleFuture<'a, S, R>
         where
-            S: crate::asynch::channel::Sender<Data = Self::SendData> + 'a,
-            R: crate::asynch::channel::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>>
-                + 'a,
+            S: crate::asynch::Sender<Data = Self::SendData> + 'a,
+            R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>> + 'a,
             S::Error: Debug + 'a;
     }
 
