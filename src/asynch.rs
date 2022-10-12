@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use core::future::Future;
 
+pub mod ws;
+
 pub trait Sender {
     type Error: Debug;
 

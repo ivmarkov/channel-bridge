@@ -38,13 +38,13 @@ mod edge_net_impl {
     use core::fmt::{self, Debug, Display};
     use core::future::Future;
     use core::marker::PhantomData;
-    
+
     use embedded_io::asynch::{Read, Write};
-    
+
     use serde::{de::DeserializeOwned, Serialize};
-    
+
     use edge_net::asynch::ws::{self, FrameType};
-    
+
     pub struct WsSender<const N: usize, W, D>(W, Option<u32>, PhantomData<fn() -> D>);
 
     impl<const N: usize, W, D> WsSender<N, W, D> {
