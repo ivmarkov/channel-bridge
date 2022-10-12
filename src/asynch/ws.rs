@@ -43,7 +43,6 @@ mod error {
 
 #[cfg(feature = "edge-net")]
 mod edge_net_impl {
-    use core::fmt::{self, Debug, Display};
     use core::future::Future;
     use core::marker::PhantomData;
 
@@ -52,6 +51,8 @@ mod edge_net_impl {
     use serde::{de::DeserializeOwned, Serialize};
 
     use edge_net::asynch::ws::{self, FrameType};
+
+    use super::*;
 
     pub struct WsSender<const N: usize, W, D>(W, Option<u32>, PhantomData<fn() -> D>);
 
@@ -160,7 +161,7 @@ pub mod embedded_svc_impl {
     use embedded_svc::ws::asynch::server::Acceptor;
     use embedded_svc::ws::{self, FrameType};
 
-    use super::WsError;
+    use super::*;
 
     pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
 
