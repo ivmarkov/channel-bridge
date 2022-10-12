@@ -1,0 +1,23 @@
+[package]
+name = "channel-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["std"]
+
+std = ["alloc", "embedded-io?/std", "embedded-svc?/std", "serde?/std"]
+alloc = ["embedded-io?/alloc", "embedded-svc?/alloc"]
+nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental"]
+edge-net = ["dep:edge-net", "embassy-futures", "embassy-sync", "embedded-io", "log", "serde", "postcard"]
+embedded-svc = ["dep:embedded-svc", "embassy-futures", "embassy-sync", "log", "serde", "postcard"]
+
+[dependencies]
+log = { version = "0.4", default-features = false, optional = true }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+postcard = { version = "0.7", default-features = false, optional = true }
+embassy-futures = { version = "0.1", git = "https://github.com/ivmarkov/embassy", optional = true }
+embassy-sync = { version = "0.1", git = "https://github.com/ivmarkov/embassy", optional = true }
+embedded-io = { version = "0.3", default-features = false, optional = true }
+embedded-svc = { version = "0.23", git = "https://github.com/esp-rs/embedded-svc", default-features = false, optional = true }
+edge-net = { version = "0.1", git = "https://github.com/ivmarkov/edge-net", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
