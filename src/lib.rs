@@ -4,7 +4,6 @@
     feature(generic_associated_types)
 )]
 #![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
-#![cfg_attr(feature = "nightly", feature(trait_alias))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use core::fmt::Debug;

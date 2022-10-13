@@ -192,8 +192,6 @@ pub mod embedded_svc_impl {
 
     use log::{info, warn};
 
-    // use serde::{de::DeserializeOwned, Serialize};
-
     use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 
     use embedded_svc::ws::asynch::server::Acceptor;
@@ -202,14 +200,16 @@ pub mod embedded_svc_impl {
     use super::*;
 
     #[cfg(feature = "embedded-svc")]
-    pub trait SendData = serde::Serialize;
+    use serde::Serialize as SendData;
     #[cfg(feature = "embedded-svc")]
-    pub trait ReceiveData = serde::de::DeserializeOwned;
+    use serde::de::DeserializeOwned as ReceiveData;
 
     #[cfg(feature = "embedded-svc-prost")]
-    pub trait SendData = prost::Message;
+    use prost::Message as SendData;
     #[cfg(feature = "embedded-svc-prost")]
-    pub trait ReceiveData = prost::Message + Default;
+    pub trait ReceiveData: prost::Message + Default {}
+    #[cfg(feature = "embedded-svc-prost")]
+    impl<T: prost::Message + Default> ReceiveData for T {}
 
     pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
 
