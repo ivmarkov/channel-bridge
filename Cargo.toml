@@ -11,11 +11,13 @@ alloc = ["embedded-io?/alloc", "embedded-svc?/alloc"]
 nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental"]
 edge-net = ["dep:edge-net", "embassy-futures", "embassy-sync", "embedded-io", "log", "serde", "heapless", "postcard"]
 embedded-svc = ["dep:embedded-svc", "embassy-futures", "embassy-sync", "log", "serde", "heapless", "postcard"]
+embedded-svc-prost = ["dep:embedded-svc", "embassy-futures", "embassy-sync", "log", "prost", "heapless", "postcard"]
 
 [dependencies]
 log = { version = "0.4", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 heapless = { version = "0.7", optional = true }
+prost = { version = "0.11", optional = true }
 postcard = { version = "0.7", default-features = false, optional = true }
 embassy-futures = { version = "0.1", git = "https://github.com/ivmarkov/embassy", optional = true }
 embassy-sync = { version = "0.1", git = "https://github.com/ivmarkov/embassy", optional = true }

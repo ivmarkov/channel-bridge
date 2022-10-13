@@ -1,32 +1,55 @@
-#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub use error::*;
 
 #[cfg(feature = "edge-net")]
 pub use edge_net_impl::*;
 
-#[cfg(feature = "embedded-svc")]
+#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub use embedded_svc_impl::*;
 
-#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc", feature = "embedded-svc-prost"))]
 mod error {
     use core::fmt::{self, Debug, Display};
+
+    #[cfg(feature = "embedded-svc-prost")]
+    #[derive(Debug)]
+    pub enum ProstError {
+        Encode(prost::EncodeError),
+        Decode(prost::DecodeError),
+    }
+
+    #[cfg(feature = "embedded-svc-prost")]
+    impl Display for ProstError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
+            ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
+        }
+    }
+    }
 
     #[derive(Debug)]
     pub enum WsError<E> {
         IoError(E),
         UnknownFrameError,
+        #[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
         PostcardError(postcard::Error),
+        #[cfg(feature = "embedded-svc-prost")]
+        ProstError(ProstError),
     }
 
-    impl<E> core::fmt::Display for WsError<E>
+    impl<E> Display for WsError<E>
     where
-        E: core::fmt::Display,
+        E: Display,
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Self::IoError(e) => write!(f, "IO Error: {}", e),
                 Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
+                #[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
                 Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
+                #[cfg(feature = "embedded-svc-prost")]
+                Self::ProstError(e) => write!(f, "Prost Error {}", e)
             }
         }
     }
@@ -34,9 +57,24 @@ mod error {
     #[cfg(feature = "std")]
     impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
 
+    #[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
     impl<E> From<postcard::Error> for WsError<E> {
         fn from(e: postcard::Error) -> Self {
             WsError::PostcardError(e)
+        }
+    }
+
+    #[cfg(feature = "embedded-svc-prost")]
+    impl<E> From<prost::EncodeError> for WsError<E> {
+        fn from(e: prost::EncodeError) -> Self {
+            WsError::ProstError(ProstError::Encode(e))
+        }
+    }
+
+    #[cfg(feature = "embedded-svc-prost")]
+    impl<E> From<prost::DecodeError> for WsError<E> {
+        fn from(e: prost::DecodeError) -> Self {
+            WsError::ProstError(ProstError::Decode(e))
         }
     }
 }
@@ -146,7 +184,7 @@ mod edge_net_impl {
     }
 }
 
-#[cfg(feature = "embedded-svc")]
+#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub mod embedded_svc_impl {
     use core::fmt::Debug;
     use core::future::Future;
@@ -154,7 +192,7 @@ pub mod embedded_svc_impl {
 
     use log::{info, warn};
 
-    use serde::{de::DeserializeOwned, Serialize};
+    // use serde::{de::DeserializeOwned, Serialize};
 
     use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 
@@ -162,6 +200,16 @@ pub mod embedded_svc_impl {
     use embedded_svc::ws::{self, FrameType};
 
     use super::*;
+
+    #[cfg(feature = "embedded-svc")]
+    pub trait SendData = serde::Serialize;
+    #[cfg(feature = "embedded-svc")]
+    pub trait ReceiveData = serde::de::DeserializeOwned;
+
+    #[cfg(feature = "embedded-svc-prost")]
+    pub trait SendData = prost::Message;
+    #[cfg(feature = "embedded-svc-prost")]
+    pub trait ReceiveData = prost::Message + Default;
 
     pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
 
@@ -173,11 +221,17 @@ pub mod embedded_svc_impl {
         pub async fn send<'a>(&'a mut self, data: &'a D) -> Result<(), WsError<S::Error>>
         where
             S: embedded_svc::ws::asynch::Sender,
-            D: Serialize,
+            D: SendData,
         {
             let mut frame_buf = [0_u8; N];
 
+            #[cfg(feature = "embedded-svc")]
             let frame_data = postcard::to_slice(data, &mut frame_buf)?;
+            #[cfg(feature = "embedded-svc-prost")]
+            let frame_data = {
+                data.encode(&mut frame_buf.as_mut()).map_err(|e| WsError::from(e))?;
+                &mut frame_buf[..data.encoded_len()]
+            };
 
             self.0
                 .send(FrameType::Binary(false), frame_data)
@@ -191,7 +245,7 @@ pub mod embedded_svc_impl {
     impl<const N: usize, S, D> crate::asynch::Sender for WsSvcSender<N, S, D>
     where
         S: ws::asynch::Sender,
-        D: Serialize,
+        D: SendData,
     {
         type Error = WsError<S::Error>;
 
@@ -214,7 +268,7 @@ pub mod embedded_svc_impl {
         pub async fn recv(&mut self) -> Result<Option<D>, WsError<R::Error>>
         where
             R: embedded_svc::ws::asynch::Receiver,
-            D: DeserializeOwned,
+            D: ReceiveData,
         {
             let mut frame_buf = [0_u8; N];
 
@@ -233,7 +287,11 @@ pub mod embedded_svc_impl {
             match frame_type {
                 FrameType::Text(_) | FrameType::Continue(_) => Err(WsError::UnknownFrameError),
                 FrameType::Binary(_) => Ok(Some(
+                    #[cfg(feature = "embedded-svc")]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
+                    
+                    #[cfg(feature = "embedded-svc-prost")]
+                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?
                 )),
                 FrameType::Close | FrameType::SocketClose => Ok(None),
                 _ => unreachable!(),
@@ -244,7 +302,7 @@ pub mod embedded_svc_impl {
     impl<const N: usize, R, D> crate::asynch::Receiver for WsSvcReceiver<N, R, D>
     where
         R: ws::asynch::Receiver,
-        D: DeserializeOwned,
+        D: ReceiveData,
     {
         type Error = WsError<R::Error>;
 
@@ -286,8 +344,8 @@ pub mod embedded_svc_impl {
     ) where
         A: Acceptor,
         H: AcceptorHandler,
-        H::SendData: Serialize,
-        H::ReceiveData: DeserializeOwned,
+        H::SendData: SendData,
+        H::ReceiveData: ReceiveData,
     {
         info!("Creating queue for {} tasks and {} workers", W, N);
         let channel = embassy_sync::channel::Channel::<NoopRawMutex, _, W>::new();
