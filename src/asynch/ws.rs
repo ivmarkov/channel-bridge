@@ -1,4 +1,8 @@
-#[cfg(any(feature = "edge-net", feature = "embedded-svc", feature = "embedded-svc-prost"))]
+#[cfg(any(
+    feature = "edge-net",
+    feature = "embedded-svc",
+    feature = "embedded-svc-prost"
+))]
 pub use error::*;
 
 #[cfg(feature = "edge-net")]
@@ -7,7 +11,11 @@ pub use edge_net_impl::*;
 #[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub use embedded_svc_impl::*;
 
-#[cfg(any(feature = "edge-net", feature = "embedded-svc", feature = "embedded-svc-prost"))]
+#[cfg(any(
+    feature = "edge-net",
+    feature = "embedded-svc",
+    feature = "embedded-svc-prost"
+))]
 mod error {
     use core::fmt::{self, Debug, Display};
 
@@ -21,11 +29,11 @@ mod error {
     #[cfg(feature = "embedded-svc-prost")]
     impl Display for ProstError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
-            ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
+            match self {
+                ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
+                ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
+            }
         }
-    }
     }
 
     #[derive(Debug)]
@@ -49,7 +57,7 @@ mod error {
                 #[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
                 Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
                 #[cfg(feature = "embedded-svc-prost")]
-                Self::ProstError(e) => write!(f, "Prost Error {}", e)
+                Self::ProstError(e) => write!(f, "Prost Error {}", e),
             }
         }
     }
@@ -200,9 +208,9 @@ pub mod embedded_svc_impl {
     use super::*;
 
     #[cfg(feature = "embedded-svc")]
-    use serde::Serialize as SendData;
-    #[cfg(feature = "embedded-svc")]
     use serde::de::DeserializeOwned as ReceiveData;
+    #[cfg(feature = "embedded-svc")]
+    use serde::Serialize as SendData;
 
     #[cfg(feature = "embedded-svc-prost")]
     use prost::Message as SendData;
@@ -229,7 +237,8 @@ pub mod embedded_svc_impl {
             let frame_data = postcard::to_slice(data, &mut frame_buf)?;
             #[cfg(feature = "embedded-svc-prost")]
             let frame_data = {
-                data.encode(&mut frame_buf.as_mut()).map_err(|e| WsError::from(e))?;
+                data.encode(&mut frame_buf.as_mut())
+                    .map_err(|e| WsError::from(e))?;
                 &mut frame_buf[..data.encoded_len()]
             };
 
@@ -289,9 +298,8 @@ pub mod embedded_svc_impl {
                 FrameType::Binary(_) => Ok(Some(
                     #[cfg(feature = "embedded-svc")]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
-                    
                     #[cfg(feature = "embedded-svc-prost")]
-                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?
+                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?,
                 )),
                 FrameType::Close | FrameType::SocketClose => Ok(None),
                 _ => unreachable!(),
