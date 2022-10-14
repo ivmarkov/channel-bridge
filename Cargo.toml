@@ -8,9 +8,9 @@ default = ["std"]
 
 std = ["alloc", "embedded-io?/std", "embedded-svc?/std", "serde?/std"]
 alloc = ["embedded-io?/alloc", "embedded-svc?/alloc"]
-nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental"]
-edge-net = ["dep:edge-net", "embassy-futures", "embassy-sync", "embedded-io", "log", "serde", "heapless", "postcard"]
-embedded-svc = ["dep:embedded-svc", "embassy-futures", "embassy-sync", "log", "serde", "heapless", "postcard"]
+nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental", "embassy-sync"]
+edge-net = ["nightly", "dep:edge-net", "embassy-futures", "embedded-io", "log", "serde", "heapless", "postcard"]
+embedded-svc = ["nightly", "dep:embedded-svc", "embassy-futures", "log", "serde", "heapless", "postcard"]
 
 [dependencies]
 log = { version = "0.4", default-features = false, optional = true }

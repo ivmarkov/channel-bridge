@@ -1,6 +1,9 @@
 use core::fmt::Debug;
 use core::future::Future;
 
+pub mod mpmc;
+pub mod pubsub;
+pub mod signal;
 pub mod ws;
 
 pub trait Sender {
@@ -12,7 +15,7 @@ pub trait Sender {
     where
         Self: 'a;
 
-    fn send<'a>(&'a mut self, data: &'a Self::Data) -> Self::SendFuture<'a>;
+    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_>;
 }
 
 impl<'t, T> Sender for &'t mut T
@@ -25,7 +28,7 @@ where
 
     type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
 
-    fn send<'a>(&'a mut self, data: &'a Self::Data) -> Self::SendFuture<'a> {
+    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
         async move { (*self).send(data).await }
     }
 }

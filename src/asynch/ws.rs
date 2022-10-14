@@ -61,14 +61,14 @@ mod edge_net_impl {
             Self(write, mask, PhantomData)
         }
 
-        pub async fn send<'a>(&'a mut self, data: &'a D) -> Result<(), WsError<ws::Error<W::Error>>>
+        pub async fn send(&mut self, data: D) -> Result<(), WsError<ws::Error<W::Error>>>
         where
             W: Write,
             D: Serialize,
         {
             let mut frame_buf = [0_u8; N];
 
-            let frame_data = postcard::to_slice(data, &mut frame_buf)?;
+            let frame_data = postcard::to_slice(&data, &mut frame_buf)?;
 
             ws::send(&mut self.0, FrameType::Binary(false), self.1, frame_data)
                 .await
@@ -89,7 +89,7 @@ mod edge_net_impl {
 
         type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
 
-        fn send<'a>(&'a mut self, data: &'a Self::Data) -> Self::SendFuture<'a> {
+        fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
             async move { WsSender::send(self, data).await }
         }
     }
@@ -199,8 +199,8 @@ pub mod embedded_svc_impl {
 
         type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
 
-        fn send<'a>(&'a mut self, data: &'a Self::Data) -> Self::SendFuture<'a> {
-            async move { WsSvcSender::send(self, data).await }
+        fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
+            async move { WsSvcSender::send(self, &data).await }
         }
     }
 
