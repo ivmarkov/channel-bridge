@@ -42,7 +42,7 @@ where
     type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>>
     where Self: 'a;
 
-    fn recv<'a>(&'a mut self) -> Self::RecvFuture<'a> {
+    fn recv(&mut self) -> Self::RecvFuture<'_> {
         async move {
             match self.next_message().await {
                 WaitResult::Message(data) => Ok(data),
@@ -87,7 +87,7 @@ where
     type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>>
     where Self: 'a;
 
-    fn recv<'a>(&'a mut self) -> Self::RecvFuture<'a> {
+    fn recv(&mut self) -> Self::RecvFuture<'_> {
         async move {
             match self.next_message().await {
                 WaitResult::Message(data) => Ok(data),
