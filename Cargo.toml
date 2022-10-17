@@ -9,11 +9,13 @@ default = ["std"]
 std = ["alloc", "embedded-io?/std", "embedded-svc?/std", "serde?/std"]
 alloc = ["embedded-io?/alloc", "embedded-svc?/alloc"]
 nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental", "embassy-sync"]
+notification = ["futures-util", "embassy-sync"]
 edge-net = ["nightly", "dep:edge-net", "embassy-futures", "embedded-io", "log", "serde", "heapless", "postcard"]
 embedded-svc = ["nightly", "dep:embedded-svc", "embassy-futures", "log", "serde", "heapless", "postcard"]
 
 [dependencies]
 log = { version = "0.4", default-features = false, optional = true }
+futures-util = { version = "0.3", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 heapless = { version = "0.7", optional = true }
 postcard = { version = "0.7", default-features = false, optional = true }

@@ -3,6 +3,8 @@ use core::future::Future;
 use core::marker::PhantomData;
 
 pub mod mpmc;
+#[cfg(feature = "notification")]
+pub mod notification;
 pub mod pubsub;
 pub mod signal;
 pub mod ws;

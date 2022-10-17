@@ -10,6 +10,8 @@ use core::fmt::Debug;
 
 #[cfg(feature = "nightly")]
 pub mod asynch;
+#[cfg(feature = "notification")]
+pub mod notification;
 
 pub trait Sender {
     type Error: Debug;
