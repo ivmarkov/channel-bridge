@@ -8,7 +8,7 @@ use embassy_sync::{
 
 use super::{Receiver, Sender};
 
-#[cfg(any(feature = "embedded-svc",feature = "embedded-svc-prost"))]
+#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub use embedded_svc_impl::*;
 
 impl<'t, T> Sender for DynPublisher<'t, T>
@@ -97,7 +97,7 @@ where
     }
 }
 
-#[cfg(feature = "embedded-svc")]
+#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
 pub mod embedded_svc_impl {
     use core::future::Future;
     use core::marker::PhantomData;
