@@ -9,7 +9,7 @@ impl<'t> Sender for &'t Notification {
 
     type Data = ();
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>>
+    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
     where Self: 'a;
 
     fn send(&mut self, _data: Self::Data) -> Self::SendFuture<'_> {
@@ -26,7 +26,7 @@ impl<'t> Receiver for &'t Notification {
 
     type Data = ();
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>>
+    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
     where Self: 'a;
 
     fn recv(&mut self) -> Self::RecvFuture<'_> {
