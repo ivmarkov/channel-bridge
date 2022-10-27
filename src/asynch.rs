@@ -29,7 +29,7 @@ where
 
     type Data = T::Data;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
+    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
 
     fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
         async move { (*self).send(data).await }
@@ -56,7 +56,7 @@ where
 
     type Data = T::Data;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> where Self: 'a;
+    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
 
     fn recv(&mut self) -> Self::RecvFuture<'_> {
         async move { (*self).recv().await }
@@ -80,7 +80,7 @@ where
 
     type Data = Q;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
+    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
 
     fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
         async move {
@@ -102,7 +102,7 @@ where
 
     type Data = Q;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> where Self: 'a;
+    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
 
     fn recv(&mut self) -> Self::RecvFuture<'_> {
         async move {

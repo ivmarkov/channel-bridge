@@ -133,7 +133,7 @@ mod edge_net_impl {
 
         type Data = D;
 
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
+        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
 
         fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
             async move { WsSender::send(self, data).await }
@@ -184,7 +184,7 @@ mod edge_net_impl {
 
         type Data = Option<D>;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> where Self: 'a;
+        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
 
         fn recv(&mut self) -> Self::RecvFuture<'_> {
             async move { WsReceiver::recv(self).await }
@@ -260,7 +260,7 @@ pub mod embedded_svc_impl {
 
         type Data = D;
 
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
+        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
 
         fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
             async move { WsSvcSender::send(self, &data).await }
@@ -316,7 +316,7 @@ pub mod embedded_svc_impl {
 
         type Data = Option<D>;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> where Self: 'a;
+        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
 
         fn recv(&mut self) -> Self::RecvFuture<'_> {
             async move { WsSvcReceiver::recv(self).await }

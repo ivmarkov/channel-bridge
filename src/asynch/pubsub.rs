@@ -19,7 +19,7 @@ where
 
     type Data = T;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>>
+    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
     where Self: 'a;
 
     fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
@@ -39,7 +39,7 @@ where
 
     type Data = T;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>>
+    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
     where Self: 'a;
 
     fn recv(&mut self) -> Self::RecvFuture<'_> {
@@ -62,7 +62,7 @@ where
 
     type Data = T;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>>
+    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
     where Self: 'a;
 
     fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
@@ -84,7 +84,7 @@ where
 
     type Data = T;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>>
+    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
     where Self: 'a;
 
     fn recv(&mut self) -> Self::RecvFuture<'_> {
@@ -127,7 +127,7 @@ pub mod embedded_svc_impl {
 
         type Data = D;
 
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> where Self: 'a;
+        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
 
         fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
             async move {
@@ -161,7 +161,7 @@ pub mod embedded_svc_impl {
 
         type Data = D;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> where Self: 'a;
+        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
 
         fn recv(&mut self) -> Self::RecvFuture<'_> {
             async move { Ok(SvcReceiver::recv(self).await) }
