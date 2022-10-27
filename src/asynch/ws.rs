@@ -1,7 +1,4 @@
-#[cfg(any(
-    feature = "edge-net",
-    feature = "embedded-svc",
-))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
 pub use error::*;
 
 #[cfg(feature = "edge-net")]
@@ -10,10 +7,7 @@ pub use edge_net_impl::*;
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
 
-#[cfg(any(
-    feature = "edge-net",
-    feature = "embedded-svc",
-))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
 mod error {
     use core::fmt::{self, Debug, Display};
 
