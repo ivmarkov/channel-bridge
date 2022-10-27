@@ -97,7 +97,7 @@ where
     }
 }
 
-#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
+#[cfg(feature = "embedded-svc")]
 pub mod embedded_svc_impl {
     use core::future::Future;
     use core::marker::PhantomData;
