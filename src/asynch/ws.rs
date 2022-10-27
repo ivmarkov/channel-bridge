@@ -1,4 +1,4 @@
-#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
 pub use error::*;
 
 #[cfg(feature = "edge-net")]
@@ -7,26 +7,49 @@ pub use edge_net_impl::*;
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
 
-#[cfg(any(feature = "edge-net", feature = "embedded-svc"))]
+#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
 mod error {
     use core::fmt::{self, Debug, Display};
+
+    #[cfg(feature = "prost")]
+    #[derive(Debug)]
+    pub enum ProstError {
+        Encode(prost::EncodeError),
+        Decode(prost::DecodeError),
+    }
+
+    #[cfg(feature = "prost")]
+    impl Display for ProstError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
+                ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
+            }
+        }
+    }
 
     #[derive(Debug)]
     pub enum WsError<E> {
         IoError(E),
         UnknownFrameError,
+        #[cfg(not(feature = "prost"))]
         PostcardError(postcard::Error),
+        #[cfg(feature = "prost")]
+        ProstError(ProstError),
     }
 
-    impl<E> core::fmt::Display for WsError<E>
+    impl<E> Display for WsError<E>
     where
-        E: core::fmt::Display,
+        E: Display,
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                Self::IoError(e) => write!(f, "IO Error: {}", e),
+                Self::IoError(e) => write!(f, "IO Error: {e}"),
                 Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
-                Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
+                #[cfg(not(feature = "prost"))]
+                Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
+                #[cfg(feature = "prost")]
+                Self::ProstError(e) => write!(f, "Prost Error {e}"),
             }
         }
     }
@@ -34,9 +57,24 @@ mod error {
     #[cfg(feature = "std")]
     impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
 
+    #[cfg(not(feature = "prost"))]
     impl<E> From<postcard::Error> for WsError<E> {
         fn from(e: postcard::Error) -> Self {
             WsError::PostcardError(e)
+        }
+    }
+
+    #[cfg(feature = "prost")]
+    impl<E> From<prost::EncodeError> for WsError<E> {
+        fn from(e: prost::EncodeError) -> Self {
+            WsError::ProstError(ProstError::Encode(e))
+        }
+    }
+
+    #[cfg(feature = "prost")]
+    impl<E> From<prost::DecodeError> for WsError<E> {
+        fn from(e: prost::DecodeError) -> Self {
+            WsError::ProstError(ProstError::Decode(e))
         }
     }
 }
@@ -48,11 +86,21 @@ mod edge_net_impl {
 
     use embedded_io::asynch::{Read, Write};
 
-    use serde::{de::DeserializeOwned, Serialize};
-
     use edge_net::asynch::ws::{self, FrameType};
 
     use super::*;
+
+    #[cfg(not(feature = "prost"))]
+    use serde::de::DeserializeOwned as ReceiveData;
+    #[cfg(not(feature = "prost"))]
+    use serde::Serialize as SendData;
+
+    #[cfg(feature = "prost")]
+    use prost::Message as SendData;
+    #[cfg(feature = "prost")]
+    pub trait ReceiveData: prost::Message + Default {}
+    #[cfg(feature = "prost")]
+    impl<T: prost::Message + Default> ReceiveData for T {}
 
     pub struct WsSender<const N: usize, W, D>(W, Option<u32>, PhantomData<fn() -> D>);
 
@@ -64,11 +112,18 @@ mod edge_net_impl {
         pub async fn send(&mut self, data: D) -> Result<(), WsError<ws::Error<W::Error>>>
         where
             W: Write,
-            D: Serialize,
+            D: SendData,
         {
             let mut frame_buf = [0_u8; N];
 
+            #[cfg(not(feature = "prost"))]
             let frame_data = postcard::to_slice(&data, &mut frame_buf)?;
+            #[cfg(feature = "prost")]
+            let frame_data = {
+                data.encode(&mut frame_buf.as_mut())
+                    .map_err(|e| WsError::from(e))?;
+                &mut frame_buf[..data.encoded_len()]
+            };
 
             ws::send(&mut self.0, FrameType::Binary(false), self.1, frame_data)
                 .await
@@ -81,7 +136,7 @@ mod edge_net_impl {
     impl<const N: usize, W, D> crate::asynch::Sender for WsSender<N, W, D>
     where
         W: Write,
-        D: Serialize,
+        D: SendData,
     {
         type Error = WsError<ws::Error<W::Error>>;
 
@@ -104,7 +159,7 @@ mod edge_net_impl {
         pub async fn recv(&mut self) -> Result<Option<D>, WsError<ws::Error<R::Error>>>
         where
             R: Read,
-            D: DeserializeOwned,
+            D: ReceiveData,
         {
             let mut frame_buf = [0_u8; N];
 
@@ -121,7 +176,10 @@ mod edge_net_impl {
             match frame_type {
                 FrameType::Text(_) | FrameType::Continue(_) => Err(WsError::UnknownFrameError),
                 FrameType::Binary(_) => Ok(Some(
+                    #[cfg(not(feature = "prost"))]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
+                    #[cfg(feature = "prost")]
+                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?,
                 )),
                 FrameType::Close => Ok(None),
                 _ => unreachable!(),
@@ -132,7 +190,7 @@ mod edge_net_impl {
     impl<const N: usize, R, D> crate::asynch::Receiver for WsReceiver<N, R, D>
     where
         R: Read,
-        D: DeserializeOwned,
+        D: ReceiveData,
     {
         type Error = WsError<ws::Error<R::Error>>;
 
@@ -154,14 +212,24 @@ pub mod embedded_svc_impl {
 
     use log::{info, warn};
 
-    use serde::{de::DeserializeOwned, Serialize};
-
     use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 
     use embedded_svc::ws::asynch::server::Acceptor;
     use embedded_svc::ws::{self, FrameType};
 
     use super::*;
+
+    #[cfg(not(feature = "prost"))]
+    use serde::de::DeserializeOwned as ReceiveData;
+    #[cfg(not(feature = "prost"))]
+    use serde::Serialize as SendData;
+
+    #[cfg(feature = "prost")]
+    use prost::Message as SendData;
+    #[cfg(feature = "prost")]
+    pub trait ReceiveData: prost::Message + Default {}
+    #[cfg(feature = "prost")]
+    impl<T: prost::Message + Default> ReceiveData for T {}
 
     pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
 
@@ -173,11 +241,18 @@ pub mod embedded_svc_impl {
         pub async fn send<'a>(&'a mut self, data: &'a D) -> Result<(), WsError<S::Error>>
         where
             S: embedded_svc::ws::asynch::Sender,
-            D: Serialize,
+            D: SendData,
         {
             let mut frame_buf = [0_u8; N];
 
+            #[cfg(not(feature = "prost"))]
             let frame_data = postcard::to_slice(data, &mut frame_buf)?;
+            #[cfg(feature = "prost")]
+            let frame_data = {
+                data.encode(&mut frame_buf.as_mut())
+                    .map_err(|e| WsError::from(e))?;
+                &mut frame_buf[..data.encoded_len()]
+            };
 
             self.0
                 .send(FrameType::Binary(false), frame_data)
@@ -191,7 +266,7 @@ pub mod embedded_svc_impl {
     impl<const N: usize, S, D> crate::asynch::Sender for WsSvcSender<N, S, D>
     where
         S: ws::asynch::Sender,
-        D: Serialize,
+        D: SendData,
     {
         type Error = WsError<S::Error>;
 
@@ -214,7 +289,7 @@ pub mod embedded_svc_impl {
         pub async fn recv(&mut self) -> Result<Option<D>, WsError<R::Error>>
         where
             R: embedded_svc::ws::asynch::Receiver,
-            D: DeserializeOwned,
+            D: ReceiveData,
         {
             let mut frame_buf = [0_u8; N];
 
@@ -233,7 +308,10 @@ pub mod embedded_svc_impl {
             match frame_type {
                 FrameType::Text(_) | FrameType::Continue(_) => Err(WsError::UnknownFrameError),
                 FrameType::Binary(_) => Ok(Some(
+                    #[cfg(not(feature = "prost"))]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
+                    #[cfg(feature = "prost")]
+                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?,
                 )),
                 FrameType::Close | FrameType::SocketClose => Ok(None),
                 _ => unreachable!(),
@@ -244,7 +322,7 @@ pub mod embedded_svc_impl {
     impl<const N: usize, R, D> crate::asynch::Receiver for WsSvcReceiver<N, R, D>
     where
         R: ws::asynch::Receiver,
-        D: DeserializeOwned,
+        D: ReceiveData,
     {
         type Error = WsError<R::Error>;
 
@@ -286,8 +364,8 @@ pub mod embedded_svc_impl {
     ) where
         A: Acceptor,
         H: AcceptorHandler,
-        H::SendData: Serialize,
-        H::ReceiveData: DeserializeOwned,
+        H::SendData: SendData,
+        H::ReceiveData: ReceiveData,
     {
         info!("Creating queue for {} tasks and {} workers", W, N);
         let channel = embassy_sync::channel::Channel::<NoopRawMutex, _, W>::new();
