@@ -44,12 +44,12 @@ mod error {
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                Self::IoError(e) => write!(f, "IO Error: {}", e),
+                Self::IoError(e) => write!(f, "IO Error: {e}"),
                 Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
                 #[cfg(not(feature = "prost"))]
-                Self::PostcardError(e) => write!(f, "Postcard Error: {}", e),
+                Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
                 #[cfg(feature = "prost")]
-                Self::ProstError(e) => write!(f, "Prost Error {}", e),
+                Self::ProstError(e) => write!(f, "Prost Error {e}"),
             }
         }
     }
