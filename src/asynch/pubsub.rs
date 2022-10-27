@@ -8,7 +8,7 @@ use embassy_sync::{
 
 use super::{Receiver, Sender};
 
-#[cfg(any(feature = "embedded-svc", feature = "embedded-svc-prost"))]
+#[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
 
 impl<'t, T> Sender for DynPublisher<'t, T>
