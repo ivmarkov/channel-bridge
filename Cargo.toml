@@ -5,7 +5,7 @@ edition = "2021"
 categories = ["embedded", "network"]
 keywords = ["embedded", "network"]
 description = "Blocking and async Sender and Receiver traits and implementations."
-repository = "https://github.com/ivmarkov/edge-net"
+repository = "https://github.com/ivmarkov/channel-bridge"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
