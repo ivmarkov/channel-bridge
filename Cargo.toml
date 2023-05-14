@@ -1,6 +1,6 @@
 [package]
 name = "channel-bridge"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 categories = ["embedded", "network"]
 keywords = ["embedded", "network"]
@@ -9,9 +9,6 @@ repository = "https://github.com/ivmarkov/channel-bridge"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 rust-version = "1.67"
-
-[patch.crates-io]
-edge-net = { git = "https://github.com/ivmarkov/edge-net" }
 
 [features]
 default = ["std"]
@@ -35,4 +32,4 @@ embassy-futures = { version = "0.1", optional = true }
 embassy-sync = { version = "0.2", optional = true }
 embedded-io = { version = "0.4", default-features = false, optional = true }
 embedded-svc = { version = "0.25", default-features = false, optional = true }
-edge-net = { version = "0.2", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
+edge-net = { version = "0.3", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
