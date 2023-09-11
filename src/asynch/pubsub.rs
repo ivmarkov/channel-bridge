@@ -147,7 +147,7 @@ pub mod embedded_svc_impl {
 
         pub async fn recv(&mut self) -> D
         where
-            R: embedded_svc::event_bus::asynch::Receiver<Data = D>,
+            R: embedded_svc::event_bus::asynch::Receiver<Result = D>,
         {
             self.0.recv().await
         }
@@ -155,7 +155,7 @@ pub mod embedded_svc_impl {
 
     impl<R, D> crate::asynch::Receiver for SvcReceiver<R, D>
     where
-        R: embedded_svc::event_bus::asynch::Receiver<Data = D>,
+        R: embedded_svc::event_bus::asynch::Receiver<Result = D>,
     {
         type Error = Infallible;
 
