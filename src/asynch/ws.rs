@@ -36,6 +36,7 @@ mod error {
         PostcardError(postcard::Error),
         #[cfg(feature = "prost")]
         ProstError(ProstError),
+        OversizedFrame(usize, usize),
     }
 
     impl<E> Display for WsError<E>
@@ -50,6 +51,7 @@ mod error {
                 Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
                 #[cfg(feature = "prost")]
                 Self::ProstError(e) => write!(f, "Prost Error {e}"),
+                Self::OversizedFrame(size, max_size) => write!(f, "Oversized Frame: {size} exceeds {max_size} by {}", size - max_size),
             }
         }
     }
@@ -169,6 +171,9 @@ mod edge_net_impl {
                     .map_err(WsError::IoError)?;
 
                 if frame_type != FrameType::Ping && frame_type != FrameType::Pong {
+                    if size > N {
+                        return Err(WsError::OversizedFrame(size, N));
+                    }
                     break (frame_type, &frame_buf[..size]);
                 }
             };
@@ -301,6 +306,9 @@ pub mod embedded_svc_impl {
                     .map_err(WsError::IoError)?;
 
                 if frame_type != FrameType::Ping && frame_type != FrameType::Pong {
+                    if size > N {
+                        return Err(WsError::OversizedFrame(size, N));
+                    }
                     break (frame_type, &frame_buf[..size]);
                 }
             };
