@@ -33,3 +33,6 @@ embassy-sync = { version = "0.2", optional = true }
 embedded-io = { version = "0.4", default-features = false, optional = true }
 embedded-svc = { version = "0.25", default-features = false, optional = true }
 edge-net = { version = "0.3", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
+
+[patch.crates-io]
+embedded-svc = { git = "https://github.com/esp-rs/embedded-svc", rev = "8c6f9d6" }
