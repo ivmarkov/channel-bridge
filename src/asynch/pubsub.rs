@@ -1,5 +1,4 @@
 use core::convert::Infallible;
-use core::future::Future;
 
 use embassy_sync::{
     blocking_mutex::raw::RawMutex,
@@ -19,15 +18,10 @@ where
 
     type Data = T;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
-    where Self: 'a;
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+        self.publish(data.clone()).await;
 
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-        async move {
-            self.publish(data.clone()).await;
-
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -39,15 +33,10 @@ where
 
     type Data = T;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
-    where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move {
-            match self.next_message().await {
-                WaitResult::Message(data) => Ok(data),
-                _ => panic!(),
-            }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        match self.next_message().await {
+            WaitResult::Message(data) => Ok(data),
+            _ => panic!(),
         }
     }
 }
@@ -62,15 +51,10 @@ where
 
     type Data = T;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
-    where Self: 'a;
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+        self.publish(data.clone()).await;
 
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-        async move {
-            self.publish(data.clone()).await;
-
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -84,87 +68,69 @@ where
 
     type Data = T;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
-    where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move {
-            match self.next_message().await {
-                WaitResult::Message(data) => Ok(data),
-                _ => panic!(),
-            }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        match self.next_message().await {
+            WaitResult::Message(data) => Ok(data),
+            _ => panic!(),
         }
     }
 }
 
 #[cfg(feature = "embedded-svc")]
 pub mod embedded_svc_impl {
-    use core::future::Future;
-    use core::marker::PhantomData;
+    pub struct SvcSender<S>(S);
 
-    use super::*;
-
-    pub struct SvcSender<S, D>(S, PhantomData<fn() -> D>);
-
-    impl<S, D> SvcSender<S, D> {
-        pub const fn new(sender: S) -> Self {
-            Self(sender, PhantomData)
-        }
-
-        pub async fn send(&mut self, data: D)
-        where
-            S: embedded_svc::event_bus::asynch::Sender<Data = D>,
-        {
-            self.0.send(data).await;
-        }
-    }
-
-    impl<S, D> crate::asynch::Sender for SvcSender<S, D>
+    impl<S> SvcSender<S>
     where
-        S: embedded_svc::event_bus::asynch::Sender<Data = D>,
+        S: embedded_svc::event_bus::asynch::Sender,
     {
-        type Error = Infallible;
+        pub const fn new(sender: S) -> Self {
+            Self(sender)
+        }
 
-        type Data = D;
-
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
-
-        fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-            async move {
-                SvcSender::send(self, data).await;
-
-                Ok(())
-            }
+        pub async fn send(&mut self, data: S::Data) -> Result<(), S::Error> {
+            self.0.send(data).await
         }
     }
 
-    pub struct SvcReceiver<R, D>(R, PhantomData<fn() -> D>);
+    impl<S> crate::asynch::Sender for SvcSender<S>
+    where
+        S: embedded_svc::event_bus::asynch::Sender,
+    {
+        type Error = S::Error;
 
-    impl<R, D> SvcReceiver<R, D> {
+        type Data = S::Data;
+
+        async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+            SvcSender::send(self, data).await
+        }
+    }
+
+    pub struct SvcReceiver<R>(R);
+
+    impl<R> SvcReceiver<R>
+    where
+        R: embedded_svc::event_bus::asynch::Receiver,
+    {
         pub const fn new(ws_receiver: R) -> Self {
-            Self(ws_receiver, PhantomData)
+            Self(ws_receiver)
         }
 
-        pub async fn recv(&mut self) -> D
-        where
-            R: embedded_svc::event_bus::asynch::Receiver<Data = D>,
-        {
+        pub async fn recv(&mut self) -> Result<R::Data, R::Error> {
             self.0.recv().await
         }
     }
 
-    impl<R, D> crate::asynch::Receiver for SvcReceiver<R, D>
+    impl<R> crate::asynch::Receiver for SvcReceiver<R>
     where
-        R: embedded_svc::event_bus::asynch::Receiver<Data = D>,
+        R: embedded_svc::event_bus::asynch::Receiver,
     {
-        type Error = Infallible;
+        type Error = R::Error;
 
-        type Data = D;
+        type Data = R::Data;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
-
-        fn recv(&mut self) -> Self::RecvFuture<'_> {
-            async move { Ok(SvcReceiver::recv(self).await) }
+        async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+            SvcReceiver::recv(self).await
         }
     }
 }

@@ -1,16 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(cfg_version)]
-#![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
-#![cfg_attr(
-    all(feature = "nightly", version("1.70")),
-    feature(impl_trait_in_assoc_type)
-)]
+#![allow(stable_features)]
+#![allow(unknown_lints)]
+#![cfg_attr(feature = "nightly", feature(async_fn_in_trait))]
+#![cfg_attr(feature = "nightly", allow(async_fn_in_trait))]
+#![cfg_attr(feature = "nightly", feature(impl_trait_projections))]
 
 use core::fmt::Debug;
 
 #[cfg(feature = "nightly")]
 pub mod asynch;
-#[cfg(feature = "notification")]
 pub mod notification;
 
 pub trait Sender {
@@ -18,7 +16,7 @@ pub trait Sender {
 
     type Data;
 
-    fn send<'a>(&'a mut self, data: &'a Self::Data) -> Result<(), Self::Error>;
+    fn send(&mut self, data: &Self::Data) -> Result<Self::Data, Self::Error>;
 }
 
 impl<'t, T> Sender for &'t mut T
@@ -29,7 +27,7 @@ where
 
     type Data = T::Data;
 
-    fn send<'a>(&'a mut self, data: &'a Self::Data) -> Result<(), Self::Error> {
+    fn send(&mut self, data: &Self::Data) -> Result<Self::Data, Self::Error> {
         (*self).send(data)
     }
 }

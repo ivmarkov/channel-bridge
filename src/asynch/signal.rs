@@ -1,4 +1,4 @@
-use core::{convert::Infallible, future::Future};
+use core::convert::Infallible;
 
 use embassy_sync::{blocking_mutex::raw::RawMutex, signal::Signal};
 
@@ -13,15 +13,10 @@ where
 
     type Data = T;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
-    where Self: 'a;
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+        Signal::signal(self, data);
 
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-        async move {
-            Signal::signal(self, data);
-
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -34,10 +29,7 @@ where
 
     type Data = T;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
-    where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move { Ok(Signal::wait(self).await) }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        Ok(Signal::wait(self).await)
     }
 }

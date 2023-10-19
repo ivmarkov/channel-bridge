@@ -1,9 +1,7 @@
 use core::fmt::Debug;
-use core::future::Future;
 use core::marker::PhantomData;
 
 pub mod mpmc;
-#[cfg(feature = "notification")]
 pub mod notification;
 pub mod pubsub;
 pub mod signal;
@@ -14,11 +12,7 @@ pub trait Sender {
 
     type Data;
 
-    type SendFuture<'a>: Future<Output = Result<(), Self::Error>>
-    where
-        Self: 'a;
-
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_>;
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error>;
 }
 
 impl<'t, T> Sender for &'t mut T
@@ -29,10 +23,8 @@ where
 
     type Data = T::Data;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
-
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-        async move { (*self).send(data).await }
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+        (*self).send(data).await
     }
 }
 
@@ -41,11 +33,7 @@ pub trait Receiver {
 
     type Data;
 
-    type RecvFuture<'a>: Future<Output = Result<Self::Data, Self::Error>>
-    where
-        Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_>;
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error>;
 }
 
 impl<'t, T> Receiver for &'t mut T
@@ -56,10 +44,8 @@ where
 
     type Data = T::Data;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move { (*self).recv().await }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        (*self).recv().await
     }
 }
 
@@ -80,15 +66,11 @@ where
 
     type Data = Q;
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
-
-    fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-        async move {
-            if let Some(data) = (self.1)(data) {
-                self.0.send(data).await
-            } else {
-                Ok(())
-            }
+    async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+        if let Some(data) = (self.1)(data) {
+            self.0.send(data).await
+        } else {
+            Ok(())
         }
     }
 }
@@ -102,14 +84,10 @@ where
 
     type Data = Q;
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move {
-            loop {
-                if let Some(data) = (self.1)(self.0.recv().await?) {
-                    return Ok(data);
-                }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        loop {
+            if let Some(data) = (self.1)(self.0.recv().await?) {
+                return Ok(data);
             }
         }
     }

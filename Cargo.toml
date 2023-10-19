@@ -10,20 +10,23 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 rust-version = "1.71"
 
+[patch.crates-io]
+embedded-svc = { git = "https://github.com/esp-rs/embedded-svc" }
+
 [features]
 default = ["std"]
 
 std = ["alloc", "embedded-io?/std", "embedded-svc?/std", "serde?/std"]
 alloc = ["embedded-io?/alloc", "embedded-svc?/alloc"]
-nightly = ["embedded-io?/async", "embedded-svc?/nightly", "embedded-svc?/experimental", "embassy-sync"]
-notification = ["futures-util", "embassy-sync"]
+nightly = ["embedded-io-async", "embedded-svc?/nightly", "embedded-svc?/experimental", "embassy-sync"]
 prost = ["dep:prost"]
 edge-net = ["nightly", "dep:edge-net", "embassy-futures", "embedded-io", "log", "serde", "heapless", "postcard"]
 embedded-svc = ["nightly", "dep:embedded-svc", "embassy-futures", "log", "serde", "heapless", "postcard"]
+portable-atomic = ["atomic-waker/portable-atomic"]
 
 [dependencies]
 log = { version = "0.4", default-features = false, optional = true }
-futures-util = { version = "0.3", default-features = false, optional = true }
+atomic-waker = { version = "1.1.1", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 heapless = { version = "0.7", optional = true }
 prost = { version = "0.11", optional = true }
@@ -31,5 +34,6 @@ postcard = { version = "1.0.2", default-features = false, optional = true }
 embassy-futures = { version = "0.1", optional = true }
 embassy-sync = { version = "0.3", optional = true }
 embedded-io = { version = "0.6", default-features = false, optional = true }
+embedded-io-async = { version = "0.6", default-features = false, optional = true }
 embedded-svc = { version = "0.26", default-features = false, optional = true }
 edge-net = { version = "0.4", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }

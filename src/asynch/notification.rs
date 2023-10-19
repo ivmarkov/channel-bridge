@@ -1,4 +1,4 @@
-use core::{convert::Infallible, future::Future};
+use core::convert::Infallible;
 
 use crate::notification::Notification;
 
@@ -9,15 +9,10 @@ impl<'t> Sender for &'t Notification {
 
     type Data = ();
 
-    type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
-    where Self: 'a;
+    async fn send(&mut self, _data: Self::Data) -> Result<Self::Data, Self::Error> {
+        Notification::notify(self);
 
-    fn send(&mut self, _data: Self::Data) -> Self::SendFuture<'_> {
-        async move {
-            Notification::notify(self);
-
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -26,10 +21,8 @@ impl<'t> Receiver for &'t Notification {
 
     type Data = ();
 
-    type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a
-    where Self: 'a;
-
-    fn recv(&mut self) -> Self::RecvFuture<'_> {
-        async move { Ok(Notification::wait(self).await) }
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        Notification::wait(self).await;
+        Ok(())
     }
 }

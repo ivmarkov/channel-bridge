@@ -7,6 +7,18 @@ pub use edge_net_impl::*;
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
 
+#[cfg(not(feature = "prost"))]
+use serde::de::DeserializeOwned as ReceiveData;
+#[cfg(not(feature = "prost"))]
+use serde::Serialize as SendData;
+
+#[cfg(feature = "prost")]
+use prost::Message as SendData;
+#[cfg(feature = "prost")]
+pub trait ReceiveData: prost::Message + Default {}
+#[cfg(feature = "prost")]
+impl<T: prost::Message + Default> ReceiveData for T {}
+
 #[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
 mod error {
     use core::fmt::{self, Debug, Display};
@@ -51,7 +63,10 @@ mod error {
                 Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
                 #[cfg(feature = "prost")]
                 Self::ProstError(e) => write!(f, "Prost Error {e}"),
-                Self::OversizedFrame(delta) => write!(f, "Oversized Frame Error: Frame exceeds max size by {delta}"),
+                Self::OversizedFrame(delta) => write!(
+                    f,
+                    "Oversized Frame Error: Frame exceeds max size by {delta}"
+                ),
             }
         }
     }
@@ -83,39 +98,26 @@ mod error {
 
 #[cfg(feature = "edge-net")]
 mod edge_net_impl {
-    use core::future::Future;
     use core::marker::PhantomData;
 
-    use embedded_io::asynch::{Read, Write};
+    use embedded_io_async::{Read, Write};
 
     use edge_net::asynch::ws::{self, FrameType};
 
     use super::*;
 
-    #[cfg(not(feature = "prost"))]
-    use serde::de::DeserializeOwned as ReceiveData;
-    #[cfg(not(feature = "prost"))]
-    use serde::Serialize as SendData;
-
-    #[cfg(feature = "prost")]
-    use prost::Message as SendData;
-    #[cfg(feature = "prost")]
-    pub trait ReceiveData: prost::Message + Default {}
-    #[cfg(feature = "prost")]
-    impl<T: prost::Message + Default> ReceiveData for T {}
-
     pub struct WsSender<const N: usize, W, D>(W, Option<u32>, PhantomData<fn() -> D>);
 
-    impl<const N: usize, W, D> WsSender<N, W, D> {
+    impl<const N: usize, W, D> WsSender<N, W, D>
+    where
+        W: Write,
+        D: SendData,
+    {
         pub const fn new(write: W, mask: Option<u32>) -> Self {
             Self(write, mask, PhantomData)
         }
 
-        pub async fn send(&mut self, data: D) -> Result<(), WsError<ws::Error<W::Error>>>
-        where
-            W: Write,
-            D: SendData,
-        {
+        pub async fn send(&mut self, data: D) -> Result<(), WsError<ws::Error<W::Error>>> {
             let mut frame_buf = [0_u8; N];
 
             #[cfg(not(feature = "prost"))]
@@ -123,7 +125,7 @@ mod edge_net_impl {
             #[cfg(feature = "prost")]
             let frame_data = {
                 data.encode(&mut frame_buf.as_mut())
-                    .map_err(|e| WsError::from(e))?;
+                    .map_err(WsError::from)?;
                 &mut frame_buf[..data.encoded_len()]
             };
 
@@ -144,25 +146,23 @@ mod edge_net_impl {
 
         type Data = D;
 
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
-
-        fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-            async move { WsSender::send(self, data).await }
+        async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+            WsSender::send(self, data).await
         }
     }
 
     pub struct WsReceiver<const N: usize, R, D>(R, PhantomData<fn() -> D>);
 
-    impl<const N: usize, R, D> WsReceiver<N, R, D> {
+    impl<const N: usize, R, D> WsReceiver<N, R, D>
+    where
+        R: Read,
+        D: ReceiveData,
+    {
         pub const fn new(read: R) -> Self {
             Self(read, PhantomData)
         }
 
-        pub async fn recv(&mut self) -> Result<Option<D>, WsError<ws::Error<R::Error>>>
-        where
-            R: Read,
-            D: ReceiveData,
-        {
+        pub async fn recv(&mut self) -> Result<Option<D>, WsError<ws::Error<R::Error>>> {
             let mut frame_buf = [0_u8; N];
 
             let (frame_type, frame_buf) = loop {
@@ -184,7 +184,7 @@ mod edge_net_impl {
                     #[cfg(not(feature = "prost"))]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
                     #[cfg(feature = "prost")]
-                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?,
+                    prost::Message::decode(frame_buf).map_err(WsError::from)?,
                 )),
                 FrameType::Close => Ok(None),
                 _ => unreachable!(),
@@ -201,18 +201,14 @@ mod edge_net_impl {
 
         type Data = Option<D>;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
-
-        fn recv(&mut self) -> Self::RecvFuture<'_> {
-            async move { WsReceiver::recv(self).await }
+        async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+            WsReceiver::recv(self).await
         }
     }
 }
 
 #[cfg(feature = "embedded-svc")]
 pub mod embedded_svc_impl {
-    use core::fmt::Debug;
-    use core::future::Future;
     use core::marker::PhantomData;
 
     use log::{info, warn};
@@ -224,30 +220,18 @@ pub mod embedded_svc_impl {
 
     use super::*;
 
-    #[cfg(not(feature = "prost"))]
-    use serde::de::DeserializeOwned as ReceiveData;
-    #[cfg(not(feature = "prost"))]
-    use serde::Serialize as SendData;
-
-    #[cfg(feature = "prost")]
-    use prost::Message as SendData;
-    #[cfg(feature = "prost")]
-    pub trait ReceiveData: prost::Message + Default {}
-    #[cfg(feature = "prost")]
-    impl<T: prost::Message + Default> ReceiveData for T {}
-
     pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
 
-    impl<const N: usize, S, D> WsSvcSender<N, S, D> {
+    impl<const N: usize, S, D> WsSvcSender<N, S, D>
+    where
+        S: embedded_svc::ws::asynch::Sender,
+        D: SendData,
+    {
         pub const fn new(ws_sender: S) -> Self {
             Self(ws_sender, PhantomData)
         }
 
-        pub async fn send<'a>(&'a mut self, data: &'a D) -> Result<(), WsError<S::Error>>
-        where
-            S: embedded_svc::ws::asynch::Sender,
-            D: SendData,
-        {
+        pub async fn send(&mut self, data: &D) -> Result<(), WsError<S::Error>> {
             let mut frame_buf = [0_u8; N];
 
             #[cfg(not(feature = "prost"))]
@@ -255,7 +239,7 @@ pub mod embedded_svc_impl {
             #[cfg(feature = "prost")]
             let frame_data = {
                 data.encode(&mut frame_buf.as_mut())
-                    .map_err(|e| WsError::from(e))?;
+                    .map_err(WsError::from)?;
                 &mut frame_buf[..data.encoded_len()]
             };
 
@@ -277,25 +261,23 @@ pub mod embedded_svc_impl {
 
         type Data = D;
 
-        type SendFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a where Self: 'a;
-
-        fn send(&mut self, data: Self::Data) -> Self::SendFuture<'_> {
-            async move { WsSvcSender::send(self, &data).await }
+        async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+            WsSvcSender::send(self, &data).await
         }
     }
 
     pub struct WsSvcReceiver<const N: usize, R, D>(R, PhantomData<fn() -> D>);
 
-    impl<const N: usize, R, D> WsSvcReceiver<N, R, D> {
+    impl<const N: usize, R, D> WsSvcReceiver<N, R, D>
+    where
+        R: embedded_svc::ws::asynch::Receiver,
+        D: ReceiveData,
+    {
         pub const fn new(ws_receiver: R) -> Self {
             Self(ws_receiver, PhantomData)
         }
 
-        pub async fn recv(&mut self) -> Result<Option<D>, WsError<R::Error>>
-        where
-            R: embedded_svc::ws::asynch::Receiver,
-            D: ReceiveData,
-        {
+        pub async fn recv(&mut self) -> Result<Option<D>, WsError<R::Error>> {
             let mut frame_buf = [0_u8; N];
 
             let (frame_type, frame_buf) = loop {
@@ -319,7 +301,7 @@ pub mod embedded_svc_impl {
                     #[cfg(not(feature = "prost"))]
                     postcard::from_bytes(frame_buf).map_err(WsError::PostcardError)?,
                     #[cfg(feature = "prost")]
-                    prost::Message::decode(frame_buf).map_err(|e| WsError::from(e))?,
+                    prost::Message::decode(frame_buf).map_err(WsError::from)?,
                 )),
                 FrameType::Close | FrameType::SocketClose => Ok(None),
                 _ => unreachable!(),
@@ -336,10 +318,8 @@ pub mod embedded_svc_impl {
 
         type Data = Option<D>;
 
-        type RecvFuture<'a> = impl Future<Output = Result<Self::Data, Self::Error>> + 'a where Self: 'a;
-
-        fn recv(&mut self) -> Self::RecvFuture<'_> {
-            async move { WsSvcReceiver::recv(self).await }
+        async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+            WsSvcReceiver::recv(self).await
         }
     }
 
@@ -347,23 +327,10 @@ pub mod embedded_svc_impl {
         type SendData;
         type ReceiveData;
 
-        type HandleFuture<'a, S, R>: Future<Output = Result<(), S::Error>>
+        async fn handle<S, R>(&self, sender: S, receiver: R, index: usize) -> Result<(), S::Error>
         where
-            Self: 'a,
-            S: crate::asynch::Sender<Data = Self::SendData> + 'a,
-            R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>> + 'a,
-            S::Error: Debug + 'a;
-
-        fn handle<'a, S, R>(
-            &'a self,
-            sender: S,
-            receiver: R,
-            index: usize,
-        ) -> Self::HandleFuture<'a, S, R>
-        where
-            S: crate::asynch::Sender<Data = Self::SendData> + 'a,
-            R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>> + 'a,
-            S::Error: Debug + 'a;
+            S: crate::asynch::Sender<Data = Self::SendData>,
+            R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>>;
     }
 
     pub async fn accept<const N: usize, const W: usize, const F: usize, A, H>(
@@ -389,7 +356,7 @@ pub mod embedded_svc_impl {
 
                     async move {
                         loop {
-                            let (sender, receiver) = channel.recv().await;
+                            let (sender, receiver) = channel.receive().await;
 
                             info!("Handler {}: Got new connection", index);
 
