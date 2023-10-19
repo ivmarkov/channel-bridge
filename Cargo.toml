@@ -1,6 +1,6 @@
 [package]
 name = "channel-bridge"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 categories = ["embedded", "network"]
 keywords = ["embedded", "network"]
@@ -33,4 +33,4 @@ embassy-sync = { version = "0.3", optional = true }
 embedded-io = { version = "0.6", default-features = false, optional = true }
 embedded-io-async = { version = "0.6", default-features = false, optional = true }
 embedded-svc = { version = "0.26.1", default-features = false, optional = true }
-edge-net = { version = "0.4", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
+edge-net = { version = "0.5", default-features = false, features = ["nightly", "embassy-util", "embedded-svc"], optional = true }
