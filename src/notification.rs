@@ -35,7 +35,7 @@ impl Notification {
         poll_fn(move |cx| self.poll_wait(cx))
     }
 
-    fn poll_wait(&self, cx: &mut Context<'_>) -> Poll<()> {
+    pub fn poll_wait(&self, cx: &mut Context<'_>) -> Poll<()> {
         self.waker.register(cx.waker());
 
         if self.triggered.swap(false, Ordering::SeqCst) {
