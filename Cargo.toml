@@ -13,17 +13,17 @@ rust-version = "1.71"
 [features]
 default = ["std"]
 
-std = ["embedded-io?/std", "embedded-svc?/std", "serde?/std"]
-nightly = ["embedded-io-async", "embedded-svc?/nightly", "embedded-svc?/experimental", "edge-net?/nightly", "embassy-sync", "serde"]
+std = ["embedded-io?/std", "embedded-svc?/std", "serde/std"]
+nightly = ["embedded-io-async", "embedded-svc?/nightly", "embedded-svc?/experimental", "edge-net?/nightly", "embassy-sync"]
 portable-atomic = ["atomic-waker/portable-atomic"]
-edge-net = ["dep:edge-net", "embassy-futures", "embedded-io", "log", "serde", "heapless", "postcard"]
-embedded-svc = ["dep:embedded-svc", "embassy-futures", "log", "serde", "heapless", "postcard"]
+edge-net = ["dep:edge-net", "embassy-futures", "embedded-io", "log", "heapless", "postcard"]
+embedded-svc = ["dep:embedded-svc", "embassy-futures", "log", "heapless", "postcard"]
 wasm = ["gloo-net", "futures", "postcard/alloc"]
 
 [dependencies]
 log = { version = "0.4", default-features = false, optional = true }
 atomic-waker = { version = "1.1.1", default-features = false }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive"] }
 heapless = { version = "0.7", optional = true }
 prost = { version = "0.11", optional = true }
 postcard = { version = "1.0.2", default-features = false, optional = true }
