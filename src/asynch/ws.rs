@@ -420,18 +420,14 @@ mod wasm_impl {
 
     use super::*;
 
-    pub struct WsWebSender<D>(
-        SplitSink<WebSocket, Message>,
-        Option<u32>,
-        PhantomData<fn() -> D>,
-    );
+    pub struct WsWebSender<D>(SplitSink<WebSocket, Message>, PhantomData<fn() -> D>);
 
     impl<D> WsWebSender<D>
     where
         D: SendData,
     {
-        pub const fn new(sender: SplitSink<WebSocket, Message>, mask: Option<u32>) -> Self {
-            Self(sender, mask, PhantomData)
+        pub const fn new(sender: SplitSink<WebSocket, Message>) -> Self {
+            Self(sender, PhantomData)
         }
 
         pub async fn send(&mut self, data: D) -> Result<(), WsError<WebSocketError>> {
