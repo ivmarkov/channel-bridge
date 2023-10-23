@@ -1,11 +1,13 @@
-#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
-pub use error::*;
+use core::fmt::{self, Debug, Display};
 
 #[cfg(feature = "edge-net")]
 pub use edge_net_impl::*;
 
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
+
+#[cfg(feature = "wasm")]
+pub use wasm_impl::*;
 
 #[cfg(not(feature = "prost"))]
 use serde::de::DeserializeOwned as ReceiveData;
@@ -19,80 +21,75 @@ pub trait ReceiveData: prost::Message + Default {}
 #[cfg(feature = "prost")]
 impl<T: prost::Message + Default> ReceiveData for T {}
 
-#[cfg(any(feature = "edge-net", feature = "embedded-svc",))]
-mod error {
-    use core::fmt::{self, Debug, Display};
+#[cfg(feature = "prost")]
+#[derive(Debug)]
+pub enum ProstError {
+    Encode(prost::EncodeError),
+    Decode(prost::DecodeError),
+}
 
-    #[cfg(feature = "prost")]
-    #[derive(Debug)]
-    pub enum ProstError {
-        Encode(prost::EncodeError),
-        Decode(prost::DecodeError),
-    }
-
-    #[cfg(feature = "prost")]
-    impl Display for ProstError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
-                ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
-            }
+#[cfg(feature = "prost")]
+impl Display for ProstError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProstError::Encode(e) => write!(f, "[Encode]: {}", e),
+            ProstError::Decode(e) => write!(f, "[Decode]: {}", e),
         }
     }
+}
 
-    #[derive(Debug)]
-    pub enum WsError<E> {
-        IoError(E),
-        UnknownFrameError,
-        #[cfg(not(feature = "prost"))]
-        PostcardError(postcard::Error),
-        #[cfg(feature = "prost")]
-        ProstError(ProstError),
-        OversizedFrame(usize),
-    }
-
-    impl<E> Display for WsError<E>
-    where
-        E: Display,
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                Self::IoError(e) => write!(f, "IO Error: {e}"),
-                Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
-                #[cfg(not(feature = "prost"))]
-                Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
-                #[cfg(feature = "prost")]
-                Self::ProstError(e) => write!(f, "Prost Error {e}"),
-                Self::OversizedFrame(delta) => write!(
-                    f,
-                    "Oversized Frame Error: Frame exceeds max size by {delta}"
-                ),
-            }
-        }
-    }
-
-    #[cfg(feature = "std")]
-    impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
-
+#[derive(Debug)]
+pub enum WsError<E> {
+    IoError(E),
+    UnknownFrameError,
     #[cfg(not(feature = "prost"))]
-    impl<E> From<postcard::Error> for WsError<E> {
-        fn from(e: postcard::Error) -> Self {
-            WsError::PostcardError(e)
+    PostcardError(postcard::Error),
+    #[cfg(feature = "prost")]
+    ProstError(ProstError),
+    OversizedFrame(usize),
+}
+
+impl<E> Display for WsError<E>
+where
+    E: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IoError(e) => write!(f, "IO Error: {e}"),
+            Self::UnknownFrameError => write!(f, "Unknown Frame Error"),
+            #[cfg(not(feature = "prost"))]
+            Self::PostcardError(e) => write!(f, "Postcard Error: {e}"),
+            #[cfg(feature = "prost")]
+            Self::ProstError(e) => write!(f, "Prost Error {e}"),
+            Self::OversizedFrame(delta) => write!(
+                f,
+                "Oversized Frame Error: Frame exceeds max size by {delta}"
+            ),
         }
     }
+}
 
-    #[cfg(feature = "prost")]
-    impl<E> From<prost::EncodeError> for WsError<E> {
-        fn from(e: prost::EncodeError) -> Self {
-            WsError::ProstError(ProstError::Encode(e))
-        }
+#[cfg(feature = "std")]
+impl<E> std::error::Error for WsError<E> where E: Display + Debug {}
+
+#[cfg(not(feature = "prost"))]
+impl<E> From<postcard::Error> for WsError<E> {
+    fn from(e: postcard::Error) -> Self {
+        WsError::PostcardError(e)
     }
+}
 
-    #[cfg(feature = "prost")]
-    impl<E> From<prost::DecodeError> for WsError<E> {
-        fn from(e: prost::DecodeError) -> Self {
-            WsError::ProstError(ProstError::Decode(e))
-        }
+#[cfg(feature = "prost")]
+impl<E> From<prost::EncodeError> for WsError<E> {
+    fn from(e: prost::EncodeError) -> Self {
+        WsError::ProstError(ProstError::Encode(e))
+    }
+}
+
+#[cfg(feature = "prost")]
+impl<E> From<prost::DecodeError> for WsError<E> {
+    fn from(e: prost::DecodeError) -> Self {
+        WsError::ProstError(ProstError::Decode(e))
     }
 }
 
@@ -409,5 +406,100 @@ pub mod embedded_svc_impl {
         .await;
 
         info!("Server processing loop quit");
+    }
+}
+
+#[cfg(feature = "wasm")]
+mod wasm_impl {
+    use core::marker::PhantomData;
+
+    use futures::stream::{SplitSink, SplitStream};
+    use futures::{SinkExt, StreamExt};
+
+    use gloo_net::websocket::{futures::WebSocket, Message, WebSocketError};
+
+    use super::*;
+
+    pub struct WsWebSender<D>(
+        SplitSink<WebSocket, Message>,
+        Option<u32>,
+        PhantomData<fn() -> D>,
+    );
+
+    impl<D> WsWebSender<D>
+    where
+        D: SendData,
+    {
+        pub const fn new(sender: SplitSink<WebSocket, Message>, mask: Option<u32>) -> Self {
+            Self(sender, mask, PhantomData)
+        }
+
+        pub async fn send(&mut self, data: D) -> Result<(), WsError<WebSocketError>> {
+            #[cfg(not(feature = "prost"))]
+            let message =
+                Message::Bytes(postcard::to_allocvec(&data).map_err(WsError::PostcardError)?);
+
+            #[cfg(feature = "prost")]
+            let message = Message::Bytes(data.encode_to_vec());
+
+            self.0.send(message).await.map_err(WsError::IoError)
+        }
+    }
+
+    impl<D> crate::asynch::Sender for WsWebSender<D>
+    where
+        D: SendData,
+    {
+        type Error = WsError<WebSocketError>;
+
+        type Data = D;
+
+        async fn send(&mut self, data: Self::Data) -> Result<(), Self::Error> {
+            WsWebSender::send(self, data).await
+        }
+    }
+
+    pub struct WsWebReceiver<D>(SplitStream<WebSocket>, PhantomData<fn() -> D>);
+
+    impl<D> WsWebReceiver<D>
+    where
+        D: ReceiveData,
+    {
+        pub const fn new(receiver: SplitStream<WebSocket>) -> Self {
+            Self(receiver, PhantomData)
+        }
+
+        pub async fn recv(&mut self) -> Result<Option<D>, WsError<WebSocketError>> {
+            if let Some(message) = self.0.next().await {
+                let message = message.map_err(WsError::IoError)?;
+
+                if let Message::Bytes(bytes) = message {
+                    #[cfg(not(feature = "prost"))]
+                    let payload = postcard::from_bytes(&bytes).map_err(WsError::PostcardError)?;
+
+                    #[cfg(feature = "prost")]
+                    let payload = prost::Message::decode(&*bytes).map_err(WsError::from)?;
+
+                    Ok(Some(payload))
+                } else {
+                    Err(WsError::UnknownFrameError)
+                }
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    impl<D> crate::asynch::Receiver for WsWebReceiver<D>
+    where
+        D: ReceiveData,
+    {
+        type Error = WsError<WebSocketError>;
+
+        type Data = Option<D>;
+
+        async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+            WsWebReceiver::recv(self).await
+        }
     }
 }
