@@ -29,6 +29,20 @@ where
     }
 }
 
+impl<D, E: Debug> Sender for PhantomData<fn() -> (D, E)> {
+    type Error = E;
+
+    type Data = D;
+
+    async fn send(&mut self, _data: Self::Data) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+pub fn nil_sender<D, E: Debug>() -> impl Sender<Error = E, Data = D> {
+    PhantomData
+}
+
 pub trait Receiver {
     type Error: Debug;
 
@@ -48,6 +62,20 @@ where
     async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
         (*self).recv().await
     }
+}
+
+impl<D, E: Debug> Receiver for PhantomData<fn() -> (D, E)> {
+    type Error = E;
+
+    type Data = D;
+
+    async fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        core::future::pending().await
+    }
+}
+
+pub fn nil_receiver<D, E: Debug>() -> impl Receiver<Error = E, Data = D> {
+    PhantomData
 }
 
 pub struct Mapper<C, F, Q>(C, F, PhantomData<fn() -> Q>);

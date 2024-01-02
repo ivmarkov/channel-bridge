@@ -5,7 +5,7 @@
 #![cfg_attr(feature = "nightly", allow(async_fn_in_trait))]
 #![cfg_attr(feature = "nightly", feature(impl_trait_projections))]
 
-use core::fmt::Debug;
+use core::{fmt::Debug, marker::PhantomData};
 
 #[cfg(feature = "nightly")]
 pub mod asynch;
@@ -16,7 +16,7 @@ pub trait Sender {
 
     type Data;
 
-    fn send(&mut self, data: &Self::Data) -> Result<Self::Data, Self::Error>;
+    fn send(&mut self, data: &Self::Data) -> Result<(), Self::Error>;
 }
 
 impl<'t, T> Sender for &'t mut T
@@ -27,9 +27,23 @@ where
 
     type Data = T::Data;
 
-    fn send(&mut self, data: &Self::Data) -> Result<Self::Data, Self::Error> {
+    fn send(&mut self, data: &Self::Data) -> Result<(), Self::Error> {
         (*self).send(data)
     }
+}
+
+impl<D, E: Debug> Sender for PhantomData<fn() -> (D, E)> {
+    type Error = E;
+
+    type Data = D;
+
+    fn send(&mut self, _data: &Self::Data) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+pub fn nil_sender<D, E: Debug>() -> impl Sender<Error = E, Data = D> {
+    PhantomData
 }
 
 pub trait Receiver {
@@ -51,4 +65,20 @@ where
     fn recv(&mut self) -> Result<Self::Data, Self::Error> {
         (*self).recv()
     }
+}
+
+impl<F: FnMut(), D, E: Debug> Receiver for (F, PhantomData<fn() -> (D, E)>) {
+    type Error = E;
+
+    type Data = D;
+
+    fn recv(&mut self) -> Result<Self::Data, Self::Error> {
+        loop {
+            (self.0)()
+        }
+    }
+}
+
+pub fn nil_receiver<F: FnMut(), D, E: Debug>(f: F) -> impl Receiver<Error = E, Data = D> {
+    (f, PhantomData)
 }
