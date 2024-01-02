@@ -14,7 +14,6 @@ rust-version = "1.71"
 default = ["std"]
 
 std = ["embedded-io?/std", "embedded-svc?/std", "serde/std"]
-nightly = ["embedded-io-async", "embedded-svc?/nightly", "embedded-svc?/experimental", "edge-net?/nightly", "embassy-sync"]
 portable-atomic = ["atomic-waker/portable-atomic"]
 edge-net = ["dep:edge-net", "embassy-futures", "embedded-io", "log", "heapless", "postcard"]
 embedded-svc = ["dep:embedded-svc", "embassy-futures", "log", "heapless", "postcard"]
@@ -30,7 +29,7 @@ postcard = { version = "1.0.2", default-features = false, optional = true }
 gloo-net = { version = "0.4", default-features = false, features = ["websocket"], optional = true }
 futures = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
 embassy-futures = { version = "0.1", optional = true }
-embassy-sync = { version = "0.5", optional = true }
+embassy-sync = "0.5"
 embedded-io = { version = "0.6", default-features = false, optional = true }
 embedded-io-async = { version = "0.6", default-features = false, optional = true }
 embedded-svc = { version = "0.26.1", default-features = false, optional = true }
