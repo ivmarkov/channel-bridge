@@ -99,7 +99,7 @@ mod edge_net_impl {
 
     use embedded_io_async::{Read, Write};
 
-    use edge_net::asynch::ws::{self, FrameType};
+    use edge_net::ws::{io, FrameType};
 
     use super::*;
 
@@ -114,7 +114,7 @@ mod edge_net_impl {
             Self(write, mask, PhantomData)
         }
 
-        pub async fn send(&mut self, data: D) -> Result<(), WsError<ws::Error<W::Error>>> {
+        pub async fn send(&mut self, data: D) -> Result<(), WsError<io::Error<W::Error>>> {
             let mut frame_buf = [0_u8; N];
 
             #[cfg(not(feature = "prost"))]
@@ -126,7 +126,7 @@ mod edge_net_impl {
                 &mut frame_buf[..data.encoded_len()]
             };
 
-            ws::send(&mut self.0, FrameType::Binary(false), self.1, frame_data)
+            io::send(&mut self.0, FrameType::Binary(false), self.1, frame_data)
                 .await
                 .map_err(WsError::IoError)?;
 
@@ -139,7 +139,7 @@ mod edge_net_impl {
         W: Write,
         D: SendData,
     {
-        type Error = WsError<ws::Error<W::Error>>;
+        type Error = WsError<io::Error<W::Error>>;
 
         type Data = D;
 
@@ -159,11 +159,11 @@ mod edge_net_impl {
             Self(read, PhantomData)
         }
 
-        pub async fn recv(&mut self) -> Result<Option<D>, WsError<ws::Error<R::Error>>> {
+        pub async fn recv(&mut self) -> Result<Option<D>, WsError<io::Error<R::Error>>> {
             let mut frame_buf = [0_u8; N];
 
             let (frame_type, frame_buf) = loop {
-                let (frame_type, size) = ws::recv(&mut self.0, &mut frame_buf)
+                let (frame_type, size) = io::recv(&mut self.0, &mut frame_buf)
                     .await
                     .map_err(WsError::IoError)?;
 
@@ -194,7 +194,7 @@ mod edge_net_impl {
         R: Read,
         D: ReceiveData,
     {
-        type Error = WsError<ws::Error<R::Error>>;
+        type Error = WsError<io::Error<R::Error>>;
 
         type Data = Option<D>;
 
