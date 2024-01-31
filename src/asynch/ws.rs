@@ -21,6 +21,9 @@ pub trait ReceiveData: prost::Message + Default {}
 #[cfg(feature = "prost")]
 impl<T: prost::Message + Default> ReceiveData for T {}
 
+pub const DEFAULT_HANDLER_TASKS_COUNT: usize = 4;
+pub const DEFAULT_BUF_SIZE: usize = 4096;
+
 #[cfg(feature = "prost")]
 #[derive(Debug)]
 pub enum ProstError {
@@ -103,38 +106,50 @@ mod edge_net_impl {
 
     use super::*;
 
-    pub struct WsSender<const N: usize, W, D>(W, Option<u32>, PhantomData<fn() -> D>);
+    pub struct WsSender<'a, W, D> {
+        write: W,
+        buf: &'a mut [u8],
+        mask: Option<u32>,
+        _type: PhantomData<fn() -> D>,
+    }
 
-    impl<const N: usize, W, D> WsSender<N, W, D>
+    impl<'a, W, D> WsSender<'a, W, D>
     where
         W: Write,
         D: SendData,
     {
-        pub const fn new(write: W, mask: Option<u32>) -> Self {
-            Self(write, mask, PhantomData)
+        pub fn new(write: W, buf: &'a mut [u8], mask: Option<u32>) -> Self {
+            Self {
+                write,
+                buf,
+                mask,
+                _type: PhantomData,
+            }
         }
 
         pub async fn send(&mut self, data: D) -> Result<(), WsError<io::Error<W::Error>>> {
-            let mut frame_buf = [0_u8; N];
-
             #[cfg(not(feature = "prost"))]
-            let frame_data = postcard::to_slice(&data, &mut frame_buf)?;
+            let frame_data = postcard::to_slice(&data, self.buf)?;
             #[cfg(feature = "prost")]
             let frame_data = {
-                data.encode(&mut frame_buf.as_mut())
-                    .map_err(WsError::from)?;
-                &mut frame_buf[..data.encoded_len()]
+                data.encode(self.buf).map_err(WsError::from)?;
+                &self.buf[..data.encoded_len()]
             };
 
-            io::send(&mut self.0, FrameType::Binary(false), self.1, frame_data)
-                .await
-                .map_err(WsError::IoError)?;
+            io::send(
+                &mut self.write,
+                FrameType::Binary(false),
+                self.mask,
+                frame_data,
+            )
+            .await
+            .map_err(WsError::IoError)?;
 
             Ok(())
         }
     }
 
-    impl<const N: usize, W, D> crate::asynch::Sender for WsSender<N, W, D>
+    impl<'a, W, D> crate::asynch::Sender for WsSender<'a, W, D>
     where
         W: Write,
         D: SendData,
@@ -148,30 +163,36 @@ mod edge_net_impl {
         }
     }
 
-    pub struct WsReceiver<const N: usize, R, D>(R, PhantomData<fn() -> D>);
+    pub struct WsReceiver<'a, R, D> {
+        read: R,
+        buf: &'a mut [u8],
+        _type: PhantomData<fn() -> D>,
+    }
 
-    impl<const N: usize, R, D> WsReceiver<N, R, D>
+    impl<'a, R, D> WsReceiver<'a, R, D>
     where
         R: Read,
         D: ReceiveData,
     {
-        pub const fn new(read: R) -> Self {
-            Self(read, PhantomData)
+        pub fn new(read: R, buf: &'a mut [u8]) -> Self {
+            Self {
+                read,
+                buf,
+                _type: PhantomData,
+            }
         }
 
         pub async fn recv(&mut self) -> Result<Option<D>, WsError<io::Error<R::Error>>> {
-            let mut frame_buf = [0_u8; N];
-
             let (frame_type, frame_buf) = loop {
-                let (frame_type, size) = io::recv(&mut self.0, &mut frame_buf)
+                let (frame_type, size) = io::recv(&mut self.read, self.buf)
                     .await
                     .map_err(WsError::IoError)?;
 
                 if frame_type != FrameType::Ping && frame_type != FrameType::Pong {
-                    if size > N {
-                        return Err(WsError::OversizedFrame(size - N));
+                    if size > self.buf.len() {
+                        return Err(WsError::OversizedFrame(size - self.buf.len()));
                     }
-                    break (frame_type, &frame_buf[..size]);
+                    break (frame_type, &self.buf[..size]);
                 }
             };
 
@@ -189,7 +210,7 @@ mod edge_net_impl {
         }
     }
 
-    impl<const N: usize, R, D> crate::asynch::Receiver for WsReceiver<N, R, D>
+    impl<'a, R, D> crate::asynch::Receiver for WsReceiver<'a, R, D>
     where
         R: Read,
         D: ReceiveData,
@@ -207,40 +228,47 @@ mod edge_net_impl {
 #[cfg(feature = "embedded-svc")]
 pub mod embedded_svc_impl {
     use core::marker::PhantomData;
+    use core::mem::MaybeUninit;
+    use core::pin::pin;
 
     use log::{info, warn};
 
     use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 
-    use embedded_svc::ws::asynch::server::Acceptor;
+    use embedded_svc::ws::asynch::server;
     use embedded_svc::ws::{self, FrameType};
 
     use super::*;
 
-    pub struct WsSvcSender<const N: usize, S, D>(S, PhantomData<fn() -> D>);
+    pub struct WsSvcSender<'a, S, D> {
+        ws_sender: S,
+        buf: &'a mut [u8],
+        _type: PhantomData<fn() -> D>,
+    }
 
-    impl<const N: usize, S, D> WsSvcSender<N, S, D>
+    impl<'a, S, D> WsSvcSender<'a, S, D>
     where
         S: embedded_svc::ws::asynch::Sender,
         D: SendData,
     {
-        pub const fn new(ws_sender: S) -> Self {
-            Self(ws_sender, PhantomData)
+        pub fn new(ws_sender: S, buf: &'a mut [u8]) -> Self {
+            Self {
+                ws_sender,
+                buf,
+                _type: PhantomData,
+            }
         }
 
         pub async fn send(&mut self, data: &D) -> Result<(), WsError<S::Error>> {
-            let mut frame_buf = [0_u8; N];
-
             #[cfg(not(feature = "prost"))]
-            let frame_data = postcard::to_slice(data, &mut frame_buf)?;
+            let frame_data = postcard::to_slice(data, self.buf)?;
             #[cfg(feature = "prost")]
             let frame_data = {
-                data.encode(&mut frame_buf.as_mut())
-                    .map_err(WsError::from)?;
-                &mut frame_buf[..data.encoded_len()]
+                data.encode(self.buf).map_err(WsError::from)?;
+                &self.buf[..data.encoded_len()]
             };
 
-            self.0
+            self.ws_sender
                 .send(FrameType::Binary(false), frame_data)
                 .await
                 .map_err(WsError::IoError)?;
@@ -249,7 +277,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<const N: usize, S, D> crate::asynch::Sender for WsSvcSender<N, S, D>
+    impl<'a, S, D> crate::asynch::Sender for WsSvcSender<'a, S, D>
     where
         S: ws::asynch::Sender,
         D: SendData,
@@ -263,32 +291,38 @@ pub mod embedded_svc_impl {
         }
     }
 
-    pub struct WsSvcReceiver<const N: usize, R, D>(R, PhantomData<fn() -> D>);
+    pub struct WsSvcReceiver<'a, R, D> {
+        ws_receiver: R,
+        buf: &'a mut [u8],
+        _type: PhantomData<fn() -> D>,
+    }
 
-    impl<const N: usize, R, D> WsSvcReceiver<N, R, D>
+    impl<'a, R, D> WsSvcReceiver<'a, R, D>
     where
         R: embedded_svc::ws::asynch::Receiver,
         D: ReceiveData,
     {
-        pub const fn new(ws_receiver: R) -> Self {
-            Self(ws_receiver, PhantomData)
+        pub fn new(ws_receiver: R, buf: &'a mut [u8]) -> Self {
+            Self {
+                ws_receiver,
+                buf,
+                _type: PhantomData,
+            }
         }
 
         pub async fn recv(&mut self) -> Result<Option<D>, WsError<R::Error>> {
-            let mut frame_buf = [0_u8; N];
-
             let (frame_type, frame_buf) = loop {
                 let (frame_type, size) = self
-                    .0
-                    .recv(&mut frame_buf)
+                    .ws_receiver
+                    .recv(self.buf)
                     .await
                     .map_err(WsError::IoError)?;
 
                 if frame_type != FrameType::Ping && frame_type != FrameType::Pong {
-                    if size > N {
-                        return Err(WsError::OversizedFrame(size - N));
+                    if size > self.buf.len() {
+                        return Err(WsError::OversizedFrame(size - self.buf.len()));
                     }
-                    break (frame_type, &frame_buf[..size]);
+                    break (frame_type, &self.buf[..size]);
                 }
             };
 
@@ -306,7 +340,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<const N: usize, R, D> crate::asynch::Receiver for WsSvcReceiver<N, R, D>
+    impl<'a, R, D> crate::asynch::Receiver for WsSvcReceiver<'a, R, D>
     where
         R: ws::asynch::Receiver,
         D: ReceiveData,
@@ -324,68 +358,92 @@ pub mod embedded_svc_impl {
         type SendData;
         type ReceiveData;
 
-        async fn handle<S, R>(&self, sender: S, receiver: R, index: usize) -> Result<(), S::Error>
+        async fn handle<S, R>(
+            &self,
+            sender: S,
+            receiver: R,
+            task_id: usize,
+        ) -> Result<(), S::Error>
         where
             S: crate::asynch::Sender<Data = Self::SendData>,
             R: crate::asynch::Receiver<Error = S::Error, Data = Option<Self::ReceiveData>>;
     }
 
-    pub async fn accept<const N: usize, const W: usize, const F: usize, A, H>(
-        acceptor: A,
-        handler: H,
-    ) where
-        A: Acceptor,
-        H: AcceptorHandler,
-        H::SendData: SendData,
-        H::ReceiveData: ReceiveData,
-    {
-        info!("Creating queue for {} tasks and {} workers", W, N);
-        let channel = embassy_sync::channel::Channel::<NoopRawMutex, _, W>::new();
+    pub type DefaultAcceptor = Acceptor<{ DEFAULT_HANDLER_TASKS_COUNT }, { DEFAULT_BUF_SIZE }, 2>;
 
-        let mut workers = heapless::Vec::<_, N>::new();
+    pub struct Acceptor<
+        const P: usize = DEFAULT_HANDLER_TASKS_COUNT,
+        const B: usize = DEFAULT_BUF_SIZE,
+        const W: usize = 2,
+    >([MaybeUninit<[u8; B]>; P], [MaybeUninit<[u8; B]>; P]);
 
-        for index in 0..N {
-            let channel = &channel;
+    impl<const P: usize, const B: usize, const W: usize> Acceptor<P, B, W> {
+        #[inline(always)]
+        pub const fn new() -> Self {
+            Self([MaybeUninit::uninit(); P], [MaybeUninit::uninit(); P])
+        }
 
-            workers
-                .push({
-                    let handler = &handler;
+        #[inline(never)]
+        #[cold]
+        pub async fn run<A, H>(&mut self, acceptor: A, handler: H)
+        where
+            A: server::Acceptor,
+            H: AcceptorHandler,
+            H::SendData: SendData,
+            H::ReceiveData: ReceiveData,
+        {
+            info!("Creating queue for {W} tasks");
+            let channel = embassy_sync::channel::Channel::<NoopRawMutex, _, W>::new();
 
-                    async move {
-                        loop {
-                            let (sender, receiver) = channel.receive().await;
+            let mut workers = heapless::Vec::<_, { P }>::new();
 
-                            info!("Handler {}: Got new connection", index);
+            for task_id in 0..P {
+                let channel = &channel;
 
-                            let res = handler
-                                .handle(
-                                    WsSvcSender::<F, _, _>::new(sender),
-                                    WsSvcReceiver::<F, _, _>::new(receiver),
-                                    index,
-                                )
-                                .await;
+                workers
+                    .push({
+                        let handler = &handler;
+                        let send_buf = self.0[task_id].as_mut_ptr();
+                        let recv_buf = self.1[task_id].as_mut_ptr();
 
-                            match res {
-                                Ok(()) => {
-                                    info!("Handler {}: connection closed", index);
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Handler {}: connection closed with error {:?}",
-                                        index, e
-                                    );
+                        async move {
+                            loop {
+                                let (sender, receiver) = channel.receive().await;
+
+                                info!("Handler task {}: Got new connection", task_id);
+
+                                let res = handler
+                                    .handle(
+                                        WsSvcSender::new(
+                                            sender,
+                                            unsafe { send_buf.as_mut() }.unwrap(),
+                                        ),
+                                        WsSvcReceiver::new(
+                                            receiver,
+                                            unsafe { recv_buf.as_mut() }.unwrap(),
+                                        ),
+                                        task_id,
+                                    )
+                                    .await;
+
+                                match res {
+                                    Ok(()) => {
+                                        info!("Handler task {}: connection closed", task_id);
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            "Handler task {}: connection closed with error {:?}",
+                                            task_id, e
+                                        );
+                                    }
                                 }
                             }
                         }
-                    }
-                })
-                .unwrap_or_else(|_| unreachable!());
-        }
+                    })
+                    .unwrap_or_else(|_| unreachable!());
+            }
 
-        let workers = workers.into_array::<N>().unwrap_or_else(|_| unreachable!());
-
-        embassy_futures::select::select(
-            async {
+            let acceptor = pin!(async {
                 loop {
                     info!("Acceptor: waiting for new connection");
 
@@ -400,12 +458,16 @@ pub mod embedded_svc_impl {
                         }
                     }
                 }
-            },
-            embassy_futures::select::select_array(workers),
-        )
-        .await;
+            });
 
-        info!("Server processing loop quit");
+            embassy_futures::select::select(
+                acceptor,
+                embassy_futures::select::select_slice(&mut workers),
+            )
+            .await;
+
+            info!("Server processing loop quit");
+        }
     }
 }
 
