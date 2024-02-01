@@ -31,8 +31,8 @@ jobs:
       - name: Build | Fmt Check
         run: cargo fmt -- --check
       - name: Build | Clippy
-        run: cargo clippy --features edge-net,embedded-svc --no-deps -- -Dwarnings
+        run: cargo clippy --features edge-ws,embedded-svc --no-deps -- -Dwarnings
       - name: Build | Default
         run: cargo build
       - name: Build | No default features
-        run: cargo build --features edge-net,embedded-svc --no-default-features
+        run: cargo build --features edge-ws,embedded-svc --no-default-features

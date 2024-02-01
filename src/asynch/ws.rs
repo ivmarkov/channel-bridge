@@ -1,7 +1,7 @@
 use core::fmt::{self, Debug, Display};
 
-#[cfg(feature = "edge-net")]
-pub use edge_net_impl::*;
+#[cfg(feature = "edge-ws")]
+pub use edge_ws_impl::*;
 
 #[cfg(feature = "embedded-svc")]
 pub use embedded_svc_impl::*;
@@ -96,13 +96,13 @@ impl<E> From<prost::DecodeError> for WsError<E> {
     }
 }
 
-#[cfg(feature = "edge-net")]
-mod edge_net_impl {
+#[cfg(feature = "edge-ws")]
+mod edge_ws_impl {
     use core::marker::PhantomData;
 
     use embedded_io_async::{Read, Write};
 
-    use edge_net::ws::{io, FrameType};
+    use edge_ws::{io, FrameType};
 
     use super::*;
 

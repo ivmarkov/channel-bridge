@@ -5,7 +5,7 @@ pub mod mpmc;
 pub mod notification;
 pub mod pubsub;
 pub mod signal;
-#[cfg(any(feature = "edge-net", feature = "embedded-svc", feature = "wasm"))]
+#[cfg(any(feature = "edge-ws", feature = "embedded-svc", feature = "wasm"))]
 pub mod ws;
 
 pub trait Sender {

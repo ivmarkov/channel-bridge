@@ -10,15 +10,12 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 rust-version = "1.75"
 
-[patch.crates-io]
-edge-net = { git = "https://github.com/ivmarkov/edge-net" }
-
 [features]
 default = ["std"]
 
 std = ["embedded-io?/std", "embedded-svc?/std", "serde/std"]
 portable-atomic = ["atomic-waker/portable-atomic"]
-edge-net = ["dep:edge-net", "embassy-futures", "embedded-io", "embedded-io-async", "log", "heapless", "postcard"]
+edge-ws = ["dep:edge-ws", "embassy-futures", "embedded-io", "embedded-io-async", "log", "heapless", "postcard"]
 embedded-svc = ["dep:embedded-svc", "embassy-futures", "log", "heapless", "postcard"]
 wasm = ["gloo-net", "futures", "postcard/alloc"]
 
@@ -36,4 +33,4 @@ embassy-futures = { version = "0.1", optional = true }
 embedded-io = { version = "0.6", default-features = false, optional = true }
 embedded-io-async = { version = "0.6", default-features = false, optional = true }
 embedded-svc = { version = "0.27", default-features = false, optional = true }
-edge-net = { version = "0.6", default-features = false, optional = true, features = ["io"] }
+edge-ws = { version = "0.2", default-features = false, optional = true, features = ["io"] }

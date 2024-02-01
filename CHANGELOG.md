@@ -9,3 +9,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Breaking changes in `asynch::ws` module:
   * Replace the `const N: usize` parameter of all senders and receivers with a `&'a mut [u8]` buffer provided externally. Reason: this provides an option to (statically) pre-allocate the buffers outside of the async code thus resulting in futures' size reduction.
   * Re-implement the `accept` function as `Acceptor::run`, where `Acceptor` is a struct having these buffers managed internally
+* Breaking change: feature `edge-net` renamed to `edge-ws`
+* Depend on `edge-ws` instead of on all of the `edge-net`
