@@ -4,7 +4,7 @@ use crate::notification::Notification;
 
 use super::{Receiver, Sender};
 
-impl<'t> Sender for &'t Notification {
+impl Sender for &Notification {
     type Error = Infallible;
 
     type Data = ();
@@ -16,7 +16,7 @@ impl<'t> Sender for &'t Notification {
     }
 }
 
-impl<'t> Receiver for &'t Notification {
+impl Receiver for &Notification {
     type Error = Infallible;
 
     type Data = ();
