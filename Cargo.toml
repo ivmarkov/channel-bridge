@@ -2,8 +2,8 @@
 name = "channel-bridge"
 version = "0.9.0"
 edition = "2021"
-categories = ["embedded", "network"]
-keywords = ["embedded", "network"]
+categories = ["embedded"]
+keywords = ["embedded"]
 description = "Blocking and async Sender and Receiver traits and implementations."
 repository = "https://github.com/ivmarkov/channel-bridge"
 license = "MIT OR Apache-2.0"
