@@ -149,7 +149,7 @@ mod edge_ws_impl {
         }
     }
 
-    impl<'a, W, D> crate::asynch::Sender for WsSender<'a, W, D>
+    impl<W, D> crate::asynch::Sender for WsSender<'_, W, D>
     where
         W: Write,
         D: SendData,
@@ -210,7 +210,7 @@ mod edge_ws_impl {
         }
     }
 
-    impl<'a, R, D> crate::asynch::Receiver for WsReceiver<'a, R, D>
+    impl<R, D> crate::asynch::Receiver for WsReceiver<'_, R, D>
     where
         R: Read,
         D: ReceiveData,
@@ -277,7 +277,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<'a, S, D> crate::asynch::Sender for WsSvcSender<'a, S, D>
+    impl<S, D> crate::asynch::Sender for WsSvcSender<'_, S, D>
     where
         S: ws::asynch::Sender,
         D: SendData,
@@ -340,7 +340,7 @@ pub mod embedded_svc_impl {
         }
     }
 
-    impl<'a, R, D> crate::asynch::Receiver for WsSvcReceiver<'a, R, D>
+    impl<R, D> crate::asynch::Receiver for WsSvcReceiver<'_, R, D>
     where
         R: ws::asynch::Receiver,
         D: ReceiveData,
@@ -376,6 +376,12 @@ pub mod embedded_svc_impl {
         const B: usize = DEFAULT_BUF_SIZE,
         const W: usize = 2,
     >([MaybeUninit<[u8; B]>; P], [MaybeUninit<[u8; B]>; P]);
+
+    impl<const P: usize, const B: usize, const W: usize> Default for Acceptor<P, B, W> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
 
     impl<const P: usize, const B: usize, const W: usize> Acceptor<P, B, W> {
         #[inline(always)]
