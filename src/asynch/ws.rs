@@ -449,6 +449,9 @@ pub mod embedded_svc_impl {
                     .unwrap_or_else(|_| unreachable!());
             }
 
+            let workers = pin!(workers);
+            let workers = unsafe { workers.map_unchecked_mut(|h| h.as_mut_slice()) };
+
             let acceptor = pin!(async {
                 loop {
                     info!("Acceptor: waiting for new connection");
@@ -468,7 +471,7 @@ pub mod embedded_svc_impl {
 
             embassy_futures::select::select(
                 acceptor,
-                embassy_futures::select::select_slice(&mut workers),
+                embassy_futures::select::select_slice(workers),
             )
             .await;
 
